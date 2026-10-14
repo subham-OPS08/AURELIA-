@@ -15,6 +15,7 @@ const navLinks = [
   { label: "Men's Collection", href: "/#men", count: "36 pieces" },
   { label: "Featured Collections", href: "/#collections", count: "A/W 26" },
   { label: "The Atelier Story", href: "/#story", count: "Craftsmanship" },
+  { label: "Saved Wishlist", href: "/account/wishlist", count: "Curated" },
   { label: "Client Account", href: "/account", count: "Portal" },
 ];
 

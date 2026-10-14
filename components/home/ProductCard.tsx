@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Eye, ShoppingBag, Check } from "lucide-react";
+import { Eye, ShoppingBag, Check, Heart } from "lucide-react";
 import { Product } from "@/types/product";
 import { formatPrice } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -20,9 +20,49 @@ export function ProductCard({ product }: ProductCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
+  const [isWishlisted, setIsWishlisted] = useState(false);
 
   const { addItem } = useCart();
   const { openQuickView } = useQuickView();
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("aurelia_wishlist");
+      if (saved) {
+        const list = JSON.parse(saved);
+        setIsWishlisted(
+          list.some(
+            (item: any) =>
+              item?.product?.id === product.id || item?.id === product.id
+          )
+        );
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [product.id]);
+
+  const toggleWishlist = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const saved = localStorage.getItem("aurelia_wishlist");
+      let list = saved ? JSON.parse(saved) : [];
+      if (isWishlisted) {
+        list = list.filter(
+          (item: any) =>
+            (item?.product?.id || item?.id) !== product.id
+        );
+        setIsWishlisted(false);
+      } else {
+        list.push({ id: `wish-${product.id}`, product });
+        setIsWishlisted(true);
+      }
+      localStorage.setItem("aurelia_wishlist", JSON.stringify(list));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -96,8 +136,18 @@ export function ProductCard({ product }: ProductCardProps) {
           )}
         </div>
 
-        {/* Quick View Hover Button */}
-        <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
+        {/* Actions (Wishlist & Quick View) */}
+        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
+          <button
+            onClick={toggleWishlist}
+            className={`p-2 bg-background/90 hover:bg-background border border-border/80 shadow-sm backdrop-blur-sm transition-colors focus:outline-none ${
+              isWishlisted ? "text-red-700" : "text-charcoal hover:text-red-700"
+            }`}
+            aria-label={isWishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
+            title={isWishlisted ? "In Wishlist" : "Save to Wishlist"}
+          >
+            <Heart className={`w-4 h-4 ${isWishlisted ? "fill-red-700" : ""}`} />
+          </button>
           <button
             onClick={handleOpenQuickView}
             className="p-2 bg-background/90 hover:bg-background text-charcoal border border-border/80 shadow-sm backdrop-blur-sm transition-colors focus:outline-none"

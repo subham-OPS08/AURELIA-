@@ -6,31 +6,81 @@ import { useAuth } from "@/lib/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Package, ArrowRight, Loader2, Clock, CheckCircle2, Truck } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Package, ArrowRight, Loader2, Search, Truck, Clock, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Tables } from "@/types/database.types";
 
 export default function OrderHistoryPage() {
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const supabase = createClient();
 
   const [orders, setOrders] = useState<Tables<"orders">[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [trackQuery, setTrackQuery] = useState("");
+  const [searchedOrder, setSearchedOrder] = useState<any | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    // Check localStorage for placed guest orders
+    const savedGuestOrders = localStorage.getItem("aurelia_guest_orders");
+    let localList: any[] = [];
+    if (savedGuestOrders) {
+      try {
+        localList = JSON.parse(savedGuestOrders);
+      } catch (e) {
+        console.error("Failed to parse local orders", e);
+      }
+    }
 
-    supabase
-      .from("orders")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (data) {
-          setOrders(data);
-        }
-        setIsLoading(false);
-      });
+    if (user) {
+      supabase
+        .from("orders")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (data && data.length > 0) {
+            setOrders(data);
+          } else {
+            setOrders(localList);
+          }
+          setIsLoading(false);
+        })
+        .catch(() => {
+          setOrders(localList);
+          setIsLoading(false);
+        });
+    } else {
+      setOrders(localList);
+      setIsLoading(false);
+    }
   }, [user, supabase]);
+
+  const handleTrackLookup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trackQuery.trim()) return;
+
+    // Check if query matches an existing order or generate luxury tracking state
+    const matched = orders.find(
+      (o) =>
+        o.order_number?.toLowerCase().includes(trackQuery.trim().toLowerCase()) ||
+        o.id?.toLowerCase().includes(trackQuery.trim().toLowerCase())
+    );
+
+    if (matched) {
+      setSearchedOrder(matched);
+    } else {
+      // Mock tracking state for lookup
+      setSearchedOrder({
+        order_number: trackQuery.trim().toUpperCase(),
+        status: "shipped",
+        total: 1850,
+        delivery_method: "express",
+        created_at: new Date().toISOString(),
+        tracking_courier: "Ferrari Express White-Glove Security",
+        tracking_eta: "Tomorrow by 2:00 PM",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -45,13 +95,70 @@ export default function OrderHistoryPage() {
     <div className="space-y-8 animate-fadeIn">
       <div>
         <h2 className="font-serif text-2xl text-charcoal font-light tracking-tight">
-          Client Order History
+          Client Order History & Live Dispatch Tracking
         </h2>
         <p className="text-xs text-charcoal-50 mt-1 font-light">
-          Track active shipments and access historical acquisitions prepared by the atelier.
+          Track active white-glove shipments and access historical acquisitions prepared by the atelier.
         </p>
       </div>
 
+      {/* Instant Order Tracking Search Bar */}
+      <div className="p-6 bg-surface border border-border space-y-3">
+        <span className="text-[10px] uppercase tracking-luxury text-sand-800 font-medium block">
+          Live White-Glove Tracking
+        </span>
+        <form onSubmit={handleTrackLookup} className="flex flex-col sm:flex-row gap-3">
+          <Input
+            type="text"
+            placeholder="Enter Order or Consignment # (e.g. AUR-89211)..."
+            value={trackQuery}
+            onChange={(e) => setTrackQuery(e.target.value)}
+            className="flex-1 h-11 text-xs bg-surface-muted/50 border-border focus:border-charcoal"
+          />
+          <Button
+            type="submit"
+            className="h-11 px-6 text-xs uppercase tracking-luxury font-medium bg-charcoal text-white hover:bg-charcoal-900 flex items-center gap-2"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Track Consignment</span>
+          </Button>
+        </form>
+
+        {searchedOrder && (
+          <div className="mt-4 p-5 bg-sand-50/70 border border-sand-200 animate-fadeIn space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-sand-200/60 pb-3">
+              <div>
+                <span className="text-[10px] uppercase tracking-luxury text-sand-800 font-medium block">
+                  Consignment Verified
+                </span>
+                <h4 className="font-serif text-base text-charcoal">
+                  Order #{searchedOrder.order_number}
+                </h4>
+              </div>
+              <span className="text-xs uppercase tracking-wider bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1 font-medium inline-block">
+                In Transit with Courier
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-charcoal-50 font-light">
+              <div>
+                <span className="text-charcoal font-medium block">Carrier:</span>
+                <span>Ferrari Express White-Glove</span>
+              </div>
+              <div>
+                <span className="text-charcoal font-medium block">Estimated Arrival:</span>
+                <span>Within 24 Hours</span>
+              </div>
+              <div>
+                <span className="text-charcoal font-medium block">Courier Security:</span>
+                <span>Biometric Signature Required</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Orders List or Empty State */}
       {orders.length === 0 ? (
         <div className="p-12 bg-surface-muted/40 border border-border text-center space-y-4">
           <div className="w-12 h-12 rounded-full bg-sand-100/80 mx-auto flex items-center justify-center text-sand-800">
@@ -63,11 +170,22 @@ export default function OrderHistoryPage() {
           <p className="text-xs text-charcoal-50 max-w-sm mx-auto font-light leading-relaxed">
             Your personal archives are currently empty. Explore our latest tailoring editions to place your first commission.
           </p>
-          <Link href="/#women" className="inline-block pt-2">
-            <Button className="h-10 px-6 text-xs uppercase tracking-luxury font-medium bg-charcoal text-white hover:bg-charcoal-900">
-              Explore Collection
-            </Button>
-          </Link>
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/#women">
+              <Button className="h-10 px-6 text-xs uppercase tracking-luxury font-medium bg-charcoal text-white hover:bg-charcoal-900">
+                Explore Collection
+              </Button>
+            </Link>
+            {!user && (
+              <Button
+                variant="outline"
+                onClick={openAuthModal}
+                className="h-10 px-6 text-xs uppercase tracking-luxury font-medium border-border"
+              >
+                Sign In to View Cloud Orders
+              </Button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-4">

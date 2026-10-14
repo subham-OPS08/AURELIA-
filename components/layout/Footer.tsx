@@ -126,6 +126,16 @@ export function Footer() {
             </h4>
             <ul className="space-y-3 font-light text-neutral-400">
               <li>
+                <Link href="/account" className="hover:text-white transition-colors">
+                  Client Portal & Orders
+                </Link>
+              </li>
+              <li>
+                <Link href="/account/wishlist" className="hover:text-white transition-colors">
+                  Saved Wishlist
+                </Link>
+              </li>
+              <li>
                 <Link href="#concierge" className="hover:text-white transition-colors">
                   Private Styling Concierge
                 </Link>

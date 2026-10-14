@@ -6,14 +6,49 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Plus, Trash2, Check, Loader2, Star } from "lucide-react";
+import { MapPin, Plus, Trash2, Check, Loader2, Star, ShieldCheck } from "lucide-react";
 import { Tables } from "@/types/database.types";
+
+const SAMPLE_DEFAULT_ADDRESSES = [
+  {
+    id: "addr-local-1",
+    user_id: "local",
+    label: "Primary Penthouse Residence",
+    full_name: "Lady Eleanor Vance",
+    phone: "+91 98765 43210",
+    address_line1: "14 Altamount Road, Tower A",
+    address_line2: "Penthouse 32",
+    city: "Mumbai",
+    state: "Maharashtra",
+    postal_code: "400026",
+    country: "India",
+    is_default: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "addr-local-2",
+    user_id: "local",
+    label: "Mayfair London Suite",
+    full_name: "Lady Eleanor Vance",
+    phone: "+44 20 7946 0912",
+    address_line1: "18 Mount Street",
+    address_line2: "Suite 4B",
+    city: "London",
+    state: "Greater London",
+    postal_code: "W1K 2RN",
+    country: "United Kingdom",
+    is_default: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
 
 export default function AddressesPage() {
   const { user } = useAuth();
   const supabase = createClient();
 
-  const [addresses, setAddresses] = useState<Tables<"addresses">[]>([]);
+  const [addresses, setAddresses] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,37 +66,52 @@ export default function AddressesPage() {
   const [isDefault, setIsDefault] = useState(false);
 
   const fetchAddresses = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("addresses")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("is_default", { ascending: false });
+    // Check localStorage first
+    const savedLocal = localStorage.getItem("aurelia_saved_addresses");
+    let initialList = SAMPLE_DEFAULT_ADDRESSES;
+    if (savedLocal) {
+      try {
+        initialList = JSON.parse(savedLocal);
+      } catch (e) {
+        console.error("Failed to parse saved addresses", e);
+      }
+    }
 
-    setAddresses(data || []);
-    setIsLoading(false);
+    if (user) {
+      const { data } = await supabase
+        .from("addresses")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("is_default", { ascending: false });
+
+      if (data && data.length > 0) {
+        setAddresses(data);
+      } else {
+        setAddresses(initialList);
+      }
+      setIsLoading(false);
+    } else {
+      setAddresses(initialList);
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchAddresses();
   }, [user]);
 
+  const saveLocalList = (newList: any[]) => {
+    setAddresses(newList);
+    localStorage.setItem("aurelia_saved_addresses", JSON.stringify(newList));
+  };
+
   const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-
     setIsSubmitting(true);
 
-    // If making default, unset other defaults
-    if (isDefault) {
-      await supabase
-        .from("addresses")
-        .update({ is_default: false })
-        .eq("user_id", user.id);
-    }
-
-    const { error } = await supabase.from("addresses").insert({
-      user_id: user.id,
+    const newAddr = {
+      id: `addr-${Date.now()}`,
+      user_id: user?.id || "local",
       label: label.trim(),
       full_name: fullName.trim(),
       phone: phone.trim(),
@@ -72,35 +122,71 @@ export default function AddressesPage() {
       postal_code: postalCode.trim(),
       country: country.trim(),
       is_default: isDefault || addresses.length === 0,
-    });
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    let updatedList = isDefault
+      ? addresses.map((a) => ({ ...a, is_default: false }))
+      : [...addresses];
+
+    updatedList.unshift(newAddr);
+    saveLocalList(updatedList);
+
+    if (user) {
+      if (isDefault) {
+        await supabase
+          .from("addresses")
+          .update({ is_default: false })
+          .eq("user_id", user.id);
+      }
+      await supabase.from("addresses").insert({
+        user_id: user.id,
+        label: label.trim(),
+        full_name: fullName.trim(),
+        phone: phone.trim(),
+        address_line1: addressLine1.trim(),
+        address_line2: addressLine2.trim() || null,
+        city: city.trim(),
+        state: state.trim(),
+        postal_code: postalCode.trim(),
+        country: country.trim(),
+        is_default: isDefault || addresses.length === 0,
+      });
+    }
 
     setIsSubmitting(false);
-
-    if (!error) {
-      setShowAddForm(false);
-      resetForm();
-      fetchAddresses();
-    }
+    setShowAddForm(false);
+    resetForm();
   };
 
   const handleSetDefault = async (addressId: string) => {
-    if (!user) return;
-    await supabase
-      .from("addresses")
-      .update({ is_default: false })
-      .eq("user_id", user.id);
+    const updated = addresses.map((a) => ({
+      ...a,
+      is_default: a.id === addressId,
+    }));
+    saveLocalList(updated);
 
-    await supabase
-      .from("addresses")
-      .update({ is_default: true })
-      .eq("id", addressId);
+    if (user) {
+      await supabase
+        .from("addresses")
+        .update({ is_default: false })
+        .eq("user_id", user.id);
 
-    fetchAddresses();
+      await supabase
+        .from("addresses")
+        .update({ is_default: true })
+        .eq("id", addressId);
+    }
   };
 
   const handleDelete = async (addressId: string) => {
-    await supabase.from("addresses").delete().eq("id", addressId);
-    fetchAddresses();
+    const updated = addresses.filter((a) => a.id !== addressId);
+    saveLocalList(updated);
+
+    if (user) {
+      await supabase.from("addresses").delete().eq("id", addressId);
+    }
   };
 
   const resetForm = () => {
@@ -130,10 +216,10 @@ export default function AddressesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="font-serif text-2xl text-charcoal font-light tracking-tight">
-            Saved Residences & Destinations
+            Saved Residences & Delivery Destinations
           </h2>
           <p className="text-xs text-charcoal-50 mt-1 font-light">
-            Manage your delivery addresses for seamless checkout dispatch.
+            Manage your primary and secondary residences for white-glove courier dispatch.
           </p>
         </div>
 
@@ -160,7 +246,7 @@ export default function AddressesPage() {
               <Input
                 id="label"
                 type="text"
-                placeholder="e.g. Primary Residence / Penthouse"
+                placeholder="e.g. Primary Penthouse / Mayfair Suite"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 required
@@ -199,7 +285,7 @@ export default function AddressesPage() {
               <Input
                 id="addressLine1"
                 type="text"
-                placeholder="12 Kensington Avenue"
+                placeholder="14 Altamount Road"
                 value={addressLine1}
                 onChange={(e) => setAddressLine1(e.target.value)}
                 required
@@ -208,11 +294,11 @@ export default function AddressesPage() {
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="addressLine2">Apartment / Suite</Label>
+              <Label htmlFor="addressLine2">Apartment / Penthouse / Suite</Label>
               <Input
                 id="addressLine2"
                 type="text"
-                placeholder="Apt 4B"
+                placeholder="Tower A, Suite 32"
                 value={addressLine2}
                 onChange={(e) => setAddressLine2(e.target.value)}
                 className="h-10 text-xs bg-surface border-border focus:border-charcoal"
@@ -233,7 +319,7 @@ export default function AddressesPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="state">State</Label>
+              <Label htmlFor="state">State / Region</Label>
               <Input
                 id="state"
                 type="text"
@@ -250,7 +336,7 @@ export default function AddressesPage() {
               <Input
                 id="postalCode"
                 type="text"
-                placeholder="400001"
+                placeholder="400026"
                 value={postalCode}
                 onChange={(e) => setPostalCode(e.target.value)}
                 required

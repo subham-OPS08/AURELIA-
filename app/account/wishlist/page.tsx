@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Heart, ShoppingBag, Trash2, Loader2, ArrowRight } from "lucide-react";
+import { PRODUCTS } from "@/lib/data/products";
 
 export default function WishlistPage() {
   const { user } = useAuth();
@@ -19,21 +20,50 @@ export default function WishlistPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchWishlist = async () => {
-    if (!user) return;
+    // Initial sample wishlist pieces from catalog
+    const defaultLocalWishlist = [
+      {
+        id: "wish-01",
+        product: PRODUCTS[0], // Cashmere Coat
+      },
+      {
+        id: "wish-02",
+        product: PRODUCTS[1], // Silk Gown
+      },
+    ];
 
-    const { data, error } = await supabase
-      .from("wishlist_items")
-      .select(`
-        id,
-        product_id,
-        created_at,
-        product:products (*)
-      `)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+    const saved = localStorage.getItem("aurelia_wishlist");
+    let localItems = defaultLocalWishlist;
+    if (saved) {
+      try {
+        localItems = JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse wishlist", e);
+      }
+    }
 
-    setWishlistItems(data || []);
-    setIsLoading(false);
+    if (user) {
+      const { data, error } = await supabase
+        .from("wishlist_items")
+        .select(`
+          id,
+          product_id,
+          created_at,
+          product:products (*)
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (data && data.length > 0) {
+        setWishlistItems(data);
+      } else {
+        setWishlistItems(localItems);
+      }
+      setIsLoading(false);
+    } else {
+      setWishlistItems(localItems);
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -41,25 +71,18 @@ export default function WishlistPage() {
   }, [user]);
 
   const handleRemove = async (wishlistId: string) => {
-    await supabase.from("wishlist_items").delete().eq("id", wishlistId);
-    setWishlistItems((prev) => prev.filter((item) => item.id !== wishlistId));
+    const updated = wishlistItems.filter((item) => item.id !== wishlistId);
+    setWishlistItems(updated);
+    localStorage.setItem("aurelia_wishlist", JSON.stringify(updated));
+
+    if (user) {
+      await supabase.from("wishlist_items").delete().eq("id", wishlistId);
+    }
   };
 
   const handleAddToCart = (product: any) => {
-    const defaultColor = { name: "Oatmeal Melange", hex: "#D8D0C5" };
-    addItem(
-      {
-        ...product,
-        images: product.images || [
-          "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=1200&auto=format&fit=crop",
-        ],
-        colors: [defaultColor],
-        sizes: ["S", "M", "L"],
-      },
-      "M",
-      defaultColor,
-      1
-    );
+    const defaultColor = product.colors?.[0] || { name: "Oatmeal Melange", hex: "#D8D0C5" };
+    addItem(product, product.sizes?.[0] || "M", defaultColor, 1);
   };
 
   if (isLoading) {
@@ -123,8 +146,9 @@ export default function WishlistPage() {
                   />
                   <button
                     onClick={() => handleRemove(item.id)}
-                    className="absolute top-3 right-3 p-2 bg-background/90 text-charcoal-50 hover:text-red-700 backdrop-blur-sm border border-border/80"
+                    className="absolute top-3 right-3 p-2 bg-background/90 text-charcoal-50 hover:text-red-700 backdrop-blur-sm border border-border/80 transition-colors"
                     title="Remove from Wishlist"
+                    aria-label="Remove item"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -133,7 +157,7 @@ export default function WishlistPage() {
                 <div className="p-4 space-y-3">
                   <div>
                     <span className="text-[10px] uppercase tracking-luxury text-sand-800 font-medium block">
-                      {product.category}
+                      {product.category} • {product.subcategory || "Haute Edition"}
                     </span>
                     <h3 className="font-serif text-base text-charcoal font-normal line-clamp-1 mt-0.5">
                       {product.name}

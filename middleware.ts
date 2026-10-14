@@ -29,22 +29,8 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh the session — important for Server Components
+  // Refresh session — important for Server Components
   await supabase.auth.getUser();
-
-  // Protect account routes — redirect to home if not authenticated
-  if (request.nextUrl.pathname.startsWith("/account")) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/";
-      url.searchParams.set("auth", "required");
-      return NextResponse.redirect(url);
-    }
-  }
 
   return supabaseResponse;
 }

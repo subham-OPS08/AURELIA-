@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, ShoppingBag, Menu, X, User } from "lucide-react";
+import { Search, ShoppingBag, Menu, X, User, Heart } from "lucide-react";
 import { useCart } from "@/lib/context/CartContext";
 import { useSearch } from "@/lib/context/SearchContext";
 import { MobileNav } from "./MobileNav";
@@ -123,6 +123,20 @@ export function Header({ darkHero = true }: HeaderProps) {
                 Search
               </span>
             </button>
+
+            <Link
+              href="/account/wishlist"
+              className={cn(
+                "hidden sm:flex items-center gap-1.5 p-1.5 transition-colors duration-300 group",
+                isLightText ? "text-white/90 hover:text-white" : "text-charcoal/80 hover:text-charcoal"
+              )}
+              aria-label="Wishlist"
+            >
+              <Heart className="w-4 h-4 transition-transform group-hover:scale-110" />
+              <span className="hidden xl:inline-block text-[11px] uppercase tracking-luxury text-inherit font-light">
+                Wishlist
+              </span>
+            </Link>
 
             <Link
               href="/account"
